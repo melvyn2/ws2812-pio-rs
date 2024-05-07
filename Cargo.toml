@@ -4,7 +4,7 @@ version = "0.9.0"
 edition = "2021"
 license = "Apache-2.0"
 description = "Driver implementation for the WS2812 smart LED using the RP2040's PIO peripheral."
-documentation =  "https://docs.rs/ws2812-pio"
+documentation = "https://docs.rs/ws2812-pio"
 repository = "https://github.com/rp-rs/ws2812-pio-rs/"
 
 [dependencies]
