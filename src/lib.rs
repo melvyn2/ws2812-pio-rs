@@ -56,14 +56,14 @@ use smart_leds_trait_0_2::SmartLedsWrite as SmartLedsWrite02;
 /// };
 ///```
 ///
-/// Typical RGBW usage example:
+/// Usage for RGBW devices is similar:
 ///```ignore
 /// use rp2040_hal::clocks::init_clocks_and_plls;
 /// let clocks = init_clocks_and_plls(...);
 /// let pins = rp2040_hal::gpio::pin::bank0::Pins::new(...);
 ///
 /// let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
-/// let mut ws = Ws2812Direct::<_, _, _, smart_leds::RGBA8>::new(
+/// let mut ws = Ws2812Direct::new_sk6812(
 ///     pins.gpio4.into_mode(),
 ///     &mut pio,
 ///     sm0,
@@ -72,10 +72,10 @@ use smart_leds_trait_0_2::SmartLedsWrite as SmartLedsWrite02;
 ///
 /// // Then you will make sure yourself to not write too frequently:
 /// loop {
-///     use smart_leds::{SmartLedsWrite, RGBA8};
-///     let color : RGBA8 = (255, 0, 255, 127).into();
+///     use smart_leds::{SmartLedsWrite, RGBW, White};
+///     let color = RGBW { r: 255, g: 0, b: 255, w: White(127) };
 ///
-///     ws.write([color].iter().copied()).unwrap();
+///     ws.write([color]).unwrap();
 ///     delay_for_at_least_60_microseconds();
 /// };
 ///```
@@ -97,12 +97,11 @@ where
     SM: StateMachineIndex,
     CF: ColorFormat,
 {
-    /// Creates a new instance of this driver.
-    pub fn new(
+    fn new_generic(
         pin: I,
         pio: &mut PIO<P>,
         sm: UninitStateMachine<(P, SM)>,
-        clock_freq: fugit::HertzU32,
+        clock_freq: HertzU32,
     ) -> Self {
         // prepare the PIO program
         let side_set = pio::SideSet::new(false, 1, false);
@@ -178,6 +177,40 @@ where
     }
 }
 
+impl<P, SM, I> Ws2812Direct<P, SM, I, smart_leds_trait::RGB8>
+where
+    I: AnyPin<Function = P::PinFunction>,
+    P: PIOExt,
+    SM: StateMachineIndex,
+{
+    /// Creates a new instance of this driver.
+    pub fn new(
+        pin: I,
+        pio: &mut PIO<P>,
+        sm: UninitStateMachine<(P, SM)>,
+        clock_freq: HertzU32,
+    ) -> Self {
+        Self::new_generic(pin, pio, sm, clock_freq)
+    }
+}
+
+impl<P, SM, I> Ws2812Direct<P, SM, I, smart_leds_trait::RGBW<u8, u8>>
+where
+    I: AnyPin<Function = P::PinFunction>,
+    P: PIOExt,
+    SM: StateMachineIndex,
+{
+    /// Creates a new instance of this driver.
+    pub fn new_sk6812(
+        pin: I,
+        pio: &mut PIO<P>,
+        sm: UninitStateMachine<(P, SM)>,
+        clock_freq: HertzU32,
+    ) -> Self {
+        Self::new_generic(pin, pio, sm, clock_freq)
+    }
+}
+
 /// Specify whether to use 3 or 4 bytes per led color.
 pub enum ColorBytes {
     ThreeBytes,
@@ -212,13 +245,13 @@ impl ColorFormat for smart_leds_trait::RGB8 {
     }
 }
 
-impl ColorFormat for smart_leds_trait::RGBA<u8> {
+impl ColorFormat for smart_leds_trait::RGBW<u8, u8> {
     const COLOR_BYTES: ColorBytes = ColorBytes::FourBytes;
     fn to_word(self) -> u32 {
         (u32::from(self.g) << 24)
             | (u32::from(self.r) << 16)
             | (u32::from(self.b) << 8)
-            | (u32::from(self.a))
+            | (u32::from(self.a.0))
     }
 }
 
@@ -310,7 +343,7 @@ where
 /// };
 ///```
 ///
-/// Typical RGBW usage example:
+/// Usage for RGBW devices is similar:
 ///```ignore
 /// use rp2040_hal::clocks::init_clocks_and_plls;
 /// let clocks = init_clocks_and_plls(...);
@@ -319,7 +352,7 @@ where
 /// let timer = Timer::new(pac.TIMER, &mut pac.RESETS);
 ///
 /// let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
-/// let mut ws = Ws2812::<_, _, _, _, smart_leds::RGBA8>::new(
+/// let mut ws = Ws2812::new_sk6812(
 ///     pins.gpio4.into_mode(),
 ///     &mut pio,
 ///     sm0,
@@ -328,10 +361,10 @@ where
 /// );
 ///
 /// loop {
-///     use smart_leds::{SmartLedsWrite, RGBA8};
-///     let color : RGBA8 = (255, 0, 255, 127).into();
+///     use smart_leds::{SmartLedsWrite, RGBW, White};
+///     let color = RGBW { r: 255, g: 0, b: 255, w: White(127) };
 ///
-///     ws.write([color].iter().copied()).unwrap();
+///     ws.write([color]).unwrap();
 ///
 ///     // Do other stuff here...
 /// };
@@ -347,23 +380,43 @@ where
     cd: C,
 }
 
-impl<P, SM, C, I, CF> Ws2812<P, SM, C, I, CF>
+impl<P, SM, C, I> Ws2812<P, SM, C, I, smart_leds_trait::RGB8>
 where
     C: CountDown,
     I: AnyPin<Function = P::PinFunction>,
     P: PIOExt,
     SM: StateMachineIndex,
-    CF: ColorFormat,
 {
     /// Creates a new instance of this driver.
     pub fn new(
         pin: I,
         pio: &mut PIO<P>,
         sm: UninitStateMachine<(P, SM)>,
-        clock_freq: fugit::HertzU32,
+        clock_freq: HertzU32,
         cd: C,
-    ) -> Ws2812<P, SM, C, I, CF> {
+    ) -> Ws2812<P, SM, C, I, smart_leds_trait::RGB8> {
         let driver = Ws2812Direct::new(pin, pio, sm, clock_freq);
+
+        Self { driver, cd }
+    }
+}
+
+impl<P, SM, C, I> Ws2812<P, SM, C, I, smart_leds_trait::RGBW<u8, u8>>
+where
+    C: CountDown,
+    I: AnyPin<Function = P::PinFunction>,
+    P: PIOExt,
+    SM: StateMachineIndex,
+{
+    /// Creates a new instance of this driver for SK6812 devices.
+    pub fn new_sk6812(
+        pin: I,
+        pio: &mut PIO<P>,
+        sm: UninitStateMachine<(P, SM)>,
+        clock_freq: HertzU32,
+        cd: C,
+    ) -> Ws2812<P, SM, C, I, smart_leds_trait::RGBW<u8, u8>> {
+        let driver = Ws2812Direct::new_sk6812(pin, pio, sm, clock_freq);
 
         Self { driver, cd }
     }
